@@ -1,0 +1,5 @@
+analysis_path       <- file.path(analysis_root, analysis_name)                   
+working_data_path   <- file.path(analysis_path, "working_data")                  
+working_sample_path <- file.path(working_data_path, "sample_description")        
+working_expr_path   <- file.path(working_data_path, "expression_data")           
+results_path        <- file.path(analysis_path, "results")

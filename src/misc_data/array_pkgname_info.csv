@@ -1,0 +1,5 @@
+platform_id,pkgname,array
+GPL96,pd.hgu133a.hs.entrezg,U133A
+GPL97,pd.hgu133b.hs.entrezg,U133B
+GPL570,pd.hgu133plus2.hs.entrezg,U133plus2
+GPL5175,pd.huex10st.hs.entrezg,HuEx10ST
