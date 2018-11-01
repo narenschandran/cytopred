@@ -8,6 +8,7 @@ working_group[working_desc[,label_type]  %in% ref_labels] <- ref_group
 working_group[working_desc[,label_type]  %in% test_labels] <- test_group
 working_desc <- data.frame(working_desc, sample_group=working_group, stringsAsFactors=F)
 
+
 working_expr <- data.frame(fread(working_expr_file, stringsAsFactors=F), row.names=1)
 snames       <- colnames(working_expr)                                           
 working_expr <- t(apply(working_expr, 1, function(x) {                           
@@ -65,6 +66,7 @@ analysis_data$test$sample_group     <- analysis_data$test$desc[,"sample_group"]
 
 analysis_data$train$logic_labels    <- analysis_data$train$class_labels %in% test_labels
 
+
 print("Generating data for accuracy of random guesses")
 set.seed(1)
 random_guesses <- replicate(random_guesser_trials, random_class_guesser(analysis_data$train$logic_labels))
@@ -88,50 +90,51 @@ rm(working_desc)
 rm(analysis_data)
 gc()
 
-dummy_vector <- matrix(FALSE, nrow=ncol(expr), dimnames=list(cnames, "dummy"))
 
 print("Generating gene pair indicator matrix")
 cl <- makeCluster(nthreads, type="FORK")
-gpi_matrix  <- do.call("cbind", parLapply(cl, 2:nrow(expr), function(i) {
-               	print(i)
+lgpi_matrix <- do.call("cbind", parLapply(cl, 1:nrow(expr), function(i) {
                	g_index <- rnames[i] > rnames
-               	gmat   <- matrix(expr[i,] > texpr[,g_index],
-               	                  nrow=length(expr[i,]),
-               	                  dimnames=list(cnames, rnames[g_index]))
-               	gp_names       <- paste(rnames[i], rnames[g_index], sep="_")
-               	colnames(gmat) <- gp_names
-               	gp_select <- apply(gmat, 2, function(x) {
-               	             	gp_accuracy_check(tlabels, x)
-               	             })
-
-#               	select_index <- which(colSums(gp_select > rguesses)==2)
-#               	if (length(select_index) > 0) {
-#               	fgmat <- do.call("cbind", lapply(select_index, function(i) {
-#               	        	genes <- strsplit(gp_names[i], "_")[[1]]
-#               	        	x <- gmat[ ,i]
-#               	        	x[x==T] <- paste(genes[1], "_greater", sep="")
-#               	        	x[x==F] <- paste(genes[2], "_greater", sep="")
-#               	        	x
-#               	        }))
-#              	colnames(fgmat) <- colnames(gmat)[select_index]
-#              	fgmat
-#              	} else {
-#              		dummy_vector
-#              	}
+               	if (sum(g_index) > 0) {
+               		gmat <- matrix(expr[i,] > texpr[,g_index], 
+               		               nrow=length(expr[i,]), 
+               		               dimnames=list(cnames, rnames[g_index]))
+               		colnames(gmat) <- paste(rnames[i], colnames(gmat), sep="_")
+               		gp_select <- apply(gmat, 2, function(x) {
+               		             	gp_accuracy_check(tlabels, x)
+               		             })
+              		select_index <- colSums(gp_select > rguesses)==2
+              		if (sum(select_index) > 0) {
+               			gmat[,select_index]
+               		} else {
+               			NULL
+               		}
+               	} else {
+               		NULL
+               	}
                }))
 stopCluster(cl)
-
-
-dummy_index <- grepl(pattern="dummy", colnames(gpi_matrix))
-gpi_matrix  <- gpi_matrix[,!dummy_index]
-print(paste("Number of gene pairs left after filtering:", ncol(gpi_matrix)))
-
-save(gpi_matrix, file=gpi_matrix_file, compress=F)
 
 rm(expr)
 rm(texpr)
 gc()
 
+print("Making gene pair indicator ready for making descriptive trees")
+gpi_matrix <- do.call("cbind", lapply(1:ncol(lgpi_matrix), function(i) {
+              	genes <- strsplit(colnames(lgpi_matrix)[i], "_")[[1]]
+              	x <- lgpi_matrix[,i]
+              	x[x==T] <- paste(genes[1], "_greater", sep="")
+              	x[x==F] <- paste(genes[2], "_greater", sep="")
+              	x
+              }))
+colnames(gpi_matrix) <- colnames(lgpi_matrix)
+
+rm(lgpi_matrix)
+gc()
+
+save(gpi_matrix, file=gpi_matrix_file, compress=F)
+
+print(paste("Number of gene pairs left after filtering:", ncol(gpi_matrix)))
 bucket_index <- rep(F, ncol(gpi_matrix))
 bucket_index[1:bucket_size] <- T
 
@@ -154,6 +157,7 @@ load(analysis_data_file)
 tree_labels      <- factor(as.character(analysis_data$train$sample_group))
 val_tree_labels  <- factor(as.character(analysis_data$validate$sample_group))
 test_tree_labels <- factor(as.character(analysis_data$test$sample_group))
+
 
 print("Generating and testing trees")
 cl <- makeCluster(4, type="FORK")
@@ -211,7 +215,7 @@ write.csv(val_results, val_results_file)
 
 all_results <- list(train_results, test_results, val_results)
 
-categories <- paste(levels(tree_labels), c("sensitivity", "sensitivity", "predictive_value", "predictive_value"), sep="_")
+categories <- c("good_sensitivity", "intr_poor_sensitivity", "good_predictor_value", "intr_poor_predictor_value")
 min_result_table <- do.call("cbind", lapply(categories, function(cat) {
                         cat_table <- do.call("cbind", lapply(all_results, function(res) {
                             res[,cat]
