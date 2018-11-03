@@ -11,3 +11,6 @@ The files required for SRP050272 are:
 tx2gene.csv
 salmon_output (folder)
 
+The script to generate tx2gene.csv is in the rnaseq_scripts folder.
+
+The current solution for generating the script for processing SRP050272 is by using generate_script.R in the rnaseq_scripts folder
